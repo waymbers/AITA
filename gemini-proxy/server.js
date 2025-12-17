@@ -3,7 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Allow up to 50MB payloads
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
