@@ -1,8 +1,10 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const fetch = require('node-fetch');
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
