@@ -183,8 +183,8 @@ const copyToClipboard = (text) => {
 
 const callGemini = async (systemInstruction, attachments = [], responseSchema = null, keyOverride = null) => {
   const model = "gemini-2.5-flash-preview-09-2025";
-  // Proxy endpoint, no API key in client
-  const url = '/api/gemini';
+  // Proxy endpoint: prefer configured production proxy, fallback to relative /api/gemini for local dev
+  const url = import.meta.env.VITE_GEMINI_PROXY || '/api/gemini';
 
   const parts = [{ text: systemInstruction }];
   attachments.forEach(att => {
