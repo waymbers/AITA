@@ -41,8 +41,7 @@ Run locally
 
 1. Install dependencies:
 
-   cd E:/aita-pro/gemini-proxy
-   npm install
+   
 
 2. Add `.env` with:
 
