@@ -201,9 +201,13 @@ const callGemini = async (systemInstruction, attachments = [], responseSchema = 
   };
 
   try {
+    const headers = { "Content-Type": "application/json" };
+    // If a proxy key is configured for production, include it as x-proxy-key
+    if (import.meta.env.VITE_PROXY_KEY) headers['x-proxy-key'] = import.meta.env.VITE_PROXY_KEY;
+
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload)
     });
 
