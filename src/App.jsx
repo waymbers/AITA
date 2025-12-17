@@ -1,81 +1,17 @@
 import React, { useState, useRef, useEffect, memo } from 'react';
 import { 
-  MessageSquare, AlertTriangle, CheckCircle2, Upload, ArrowRight, 
-  Activity, ShieldCheck, Info, RefreshCcw, Scale, Zap, FileImage, 
-  FileText, X, Smartphone, Users, Sparkles, Copy, Loader2, Trophy, 
-  Gavel, BrainCircuit, HeartCrack, Mic, Search, ChevronDown, 
-  ChevronUp, Quote, TrendingUp, Bot, Wand2, Send, Paperclip, 
-  Key, Skull, PenTool, Link as LinkIcon, Globe, Lock, Siren 
+  MessageSquare, AlertTriangle, CheckCircle2, Upload, ArrowRight, Activity, 
+  ShieldCheck, Info, RefreshCcw, Scale, Zap, FileImage, FileText, X, 
+  Smartphone, Users, Sparkles, Copy, Loader2, Trophy, Gavel, BrainCircuit, 
+  HeartCrack, Mic, Search, ChevronDown, ChevronUp, Quote, TrendingUp, Bot, 
+  Wand2, Send, Paperclip, Key, Skull, PenTool, Link as LinkIcon, Globe, Lock, Siren
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  onAuthStateChanged, 
-  signInAnonymously, 
-  signInWithCustomToken 
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  doc, 
-  getDoc 
-} from 'firebase/firestore';
 
 /**
  * ------------------------------------------------------------------
- * FIREBASE CONFIGURATION & AUTH
+ * UTILITIES & API HANDLER
  * ------------------------------------------------------------------
  */
-const firebaseConfig = {
-  // apiKey: "YOUR_API_KEY",
-  // authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  // projectId: "YOUR_PROJECT_ID",
-  // storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  // messagingSenderId: "YOUR_SENDER_ID",
-  // appId: "YOUR_APP_ID"
-};
-
-const effectiveConfig = Object.keys(firebaseConfig).length > 0 
-  ? firebaseConfig 
-  : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {});
-
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'aita-pro';
-
-let app, auth, db;
-try {
-  app = initializeApp(effectiveConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-} catch (e) {
-  console.warn("Firebase not initialized. Add your config in src/App.jsx");
-}
-
-const useAuth = () => {
-  const [user, setUser] = useState(null);
-  useEffect(() => {
-    if (!auth) return;
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-    return onAuthStateChanged(auth, setUser);
-  }, []);
-  return user;
-};
-
-/**
- * ------------------------------------------------------------------
- * UTILITIES
- * ------------------------------------------------------------------
- */
-
-const getSpeechRecognition = () => {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  return SpeechRecognition ? new SpeechRecognition() : null;
-};
 
 const copyToClipboard = (text) => {
   try {
@@ -98,7 +34,8 @@ const copyToClipboard = (text) => {
 };
 
 const callGemini = async (systemInstruction, attachments = [], responseSchema = null, keyOverride = null) => {
-  const url = import.meta.env.VITE_GEMINI_PROXY || '/api/gemini';
+  // FIXED: Use relative path for Proxy to handle CORS
+  const url = '/api/gemini'; 
 
   const parts = [{ text: systemInstruction }];
   attachments.forEach(att => {
@@ -116,36 +53,38 @@ const callGemini = async (systemInstruction, attachments = [], responseSchema = 
 
   try {
     const headers = { "Content-Type": "application/json" };
-    if (import.meta.env.VITE_PROXY_KEY) headers['x-proxy-key'] = import.meta.env.VITE_PROXY_KEY;
-
+    // If you implemented the userApiKey feature, we can pass it in headers if your backend supports it, 
+    // or you might rely on the backend's env variable. 
+    // For this implementation, we send standard requests to the proxy.
+    
     const response = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ 
+        ...payload,
+        // Optional: Pass key if your backend endpoint expects it in the body to override server env
+        // key: keyOverride 
+      })
     });
 
     if (!response.ok) {
-        if (response.status === 401 || response.status === 403) throw new Error("Invalid API Key or Unauthorized Request (401)");
-        if (response.status === 503) throw new Error("Service Unavailable (503). The AI model is currently overloaded.");
+        if (response.status === 401 || response.status === 403) throw new Error("Unauthorized (401). Check API Key.");
+        if (response.status === 503) throw new Error("Service Unavailable (503). Model overloaded.");
         throw new Error(`API Error: ${response.status}`);
     }
 
     const data = await response.json();
     
-    if (data.promptFeedback?.blockReason) throw new Error(`AI Generation Blocked (Prompt): ${data.promptFeedback.blockReason}`);
-    if (!data.candidates || data.candidates.length === 0) throw new Error("AI returned no response candidates.");
+    // Handle different backend response structures
+    const candidate = data.candidates ? data.candidates[0] : (data.result ? { content: { parts: [{ text: data.result }] } } : null);
 
-    const candidate = data.candidates[0];
-    if (candidate.finishReason && candidate.finishReason !== "STOP") {
-        if (candidate.finishReason === "SAFETY") throw new Error("AI Safety Filter Triggered.");
-        if (!candidate.content) throw new Error(`AI stopped with reason: ${candidate.finishReason}`);
-    }
-    
+    if (!candidate) throw new Error("AI returned no response candidates.");
+
     const contentParts = candidate.content?.parts || [];
     const textResult = contentParts.filter(p => p.text).map(p => p.text).join('');
     
     if (!textResult.trim()) throw new Error("AI returned empty text content.");
-    
+
     if (responseSchema) {
       try {
         return JSON.parse(textResult);
@@ -250,7 +189,7 @@ const RealityScale = memo(({ score, evidence, speakerMap, dominantFactor }) => {
 
   const speakerA = speakerMap.find(s => s.id === 'A') || { label: 'Speaker A' };
   const speakerB = speakerMap.find(s => s.id === 'B') || { label: 'Speaker B' };
-  
+ 
   return (
     <div className="mb-10 animate-in slide-in-from-top-4 duration-700">
       <div onClick={() => setIsOpen(!isOpen)} className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden cursor-pointer hover:shadow-2xl transition-shadow group relative">
@@ -293,10 +232,10 @@ const RealityScale = memo(({ score, evidence, speakerMap, dominantFactor }) => {
                 <div className="space-y-3">
                     {evidence && evidence.map((item, idx) => (
                         <div key={idx} className="flex gap-4 p-4 bg-white rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
-                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.favors === 'A' ? 'bg-rose-500' : 'bg-rose-500'}`}></div>
+                             <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.favors === 'A' ? 'bg-rose-500' : 'bg-rose-500'}`}></div>
                             <div className="mt-1 shrink-0 text-slate-400"><CheckCircle2 size={18} /></div>
                             <div>
-                                <div className="flex items-center gap-2 mb-1">
+                                 <div className="flex items-center gap-2 mb-1">
                                     <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${item.favors === 'A' ? 'bg-rose-100 text-rose-700' : 'bg-rose-100 text-rose-700'}`}>Against {item.favors === 'A' ? speakerA.label : speakerB.label}</span>
                                     <span className="text-xs font-bold text-slate-800">{item.impact}</span>
                                 </div>
@@ -304,7 +243,7 @@ const RealityScale = memo(({ score, evidence, speakerMap, dominantFactor }) => {
                             </div>
                         </div>
                     ))}
-                </div>
+                 </div>
             </div>
         )}
       </div>
@@ -371,6 +310,7 @@ const PracticeDojo = memo(({ analysis, onExit, userApiKey }) => {
     setMessages(prev => [...prev, userMsg]);
     setInputText("");
     setLoading(true);
+ 
     const otherPerson = analysis?.speaker_mapping?.parties?.find(p => p.id === 'B') || { label: 'The Other Person' };
     const otherSpeakerTags = analysis?.speakers?.find(s => s.id === 'B')?.tags || [];
     const narrativeBody = typeof analysis?.narrative?.body === 'string' ? analysis.narrative.body : '';
@@ -378,7 +318,12 @@ const PracticeDojo = memo(({ analysis, onExit, userApiKey }) => {
       const prompt = `ROLEPLAY SIMULATION. Roleplay as "${otherPerson.label}". Context: ${narrativeBody}. Personality: ${JSON.stringify(otherSpeakerTags)}. User msg: "${inputText}". 1. Reply STRICTLY as Speaker B. 2. Provide a SEPARATE "Coach Tip" on how the user's message landed. Return JSON: { reply, coach_tip, intensity_score }`;
       const result = await callGemini(prompt, [], SIMULATION_SCHEMA, userApiKey);
       setMessages(prev => [...prev, { role: 'ai', text: result.reply, tip: result.coach_tip }]);
-    } catch (e) { console.error(e); setMessages(prev => [...prev, { role: 'ai', text: "Connection error. Try again.", isSystem: true }]); } finally { setLoading(false); }
+    } catch (e) { 
+        console.error(e);
+        setMessages(prev => [...prev, { role: 'ai', text: "Connection error. Try again.", isSystem: true }]); 
+    } finally { 
+        setLoading(false);
+    }
   };
 
   return (
@@ -426,7 +371,6 @@ const DetailedResolve = memo(({ data, onPractice, userApiKey }) => {
       The user is Speaker A. Speaker A needs to reply to Speaker B.
       The joint reality is: "${data.joint || ''}".
       Speaker A's recommended steps are: ${JSON.stringify(data.speakerA_steps || [])}.
-      
       Task: Draft a specific text message response for Speaker A.
       Tone: ${type === "high_road" ? "The High Road (Calm, mature, de-escalating)" : "Firm Boundary (Assertive, no-nonsense, self-respecting)"}.
       Constraints: Max 3 sentences. No emojis unless ironic.
@@ -455,16 +399,13 @@ const DetailedResolve = memo(({ data, onPractice, userApiKey }) => {
           <h3 className="font-bold text-lg tracking-wide">RESOLVE: Strategic Next Steps</h3>
         </div>
         <div className="flex gap-2">
-          <button 
-             onClick={onPractice}
-             className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors"
-           >
+          <button onClick={onPractice} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors">
              <Bot size={14} />
              Practice
            </button>
         </div>
       </div>
-      
+     
       <div className="p-6">
         <div className="mb-8 p-4 bg-white rounded-xl border-l-4 border-indigo-500 shadow-sm">
           <h4 className="text-indigo-900 font-bold mb-2">The Joint Reality</h4>
@@ -507,24 +448,20 @@ const DetailedResolve = memo(({ data, onPractice, userApiKey }) => {
           </div>
         </div>
 
-        {/* New Reply Architect Component */}
         <ReplyArchitect onDraft={handleMagicDraft} userApiKey={userApiKey} />
 
-        {/* Display Generated Drafts if any */}
         {generatedDraft && (
            <div className="mt-4 bg-indigo-100 border border-indigo-200 rounded-xl p-4 animate-in slide-in-from-top-2">
               <div className="flex justify-between items-center mb-2">
                  <h4 className="flex items-center gap-2 text-indigo-800 font-bold text-sm">
-                    <Sparkles size={14} /> Generated Draft: {generatedDraft.type === 'high_road' ? 'The High Road' : 'Firm Boundary'}
+                   <Sparkles size={14} /> Generated Draft: {generatedDraft.type === 'high_road' ? 'The High Road' : 'Firm Boundary'}
                  </h4>
                  <button onClick={() => setGeneratedDraft(null)} className="text-indigo-400 hover:text-indigo-600"><X size={14} /></button>
               </div>
               <p className="font-mono text-sm text-slate-700 bg-white p-3 rounded border border-indigo-100 mb-2">
                  "{generatedDraft.text}"
               </p>
-              <p className="text-xs text-indigo-400">
-                *Always edit before sending.
-              </p>
+              <p className="text-xs text-indigo-400">*Always edit before sending.</p>
            </div>
         )}
       </div>
@@ -532,7 +469,7 @@ const DetailedResolve = memo(({ data, onPractice, userApiKey }) => {
   );
 });
 
-const ConversationResults = memo(({ data, onReset, onPractice, userApiKey, user, shareId }) => {
+const ConversationResults = memo(({ data, onReset, onPractice, userApiKey }) => {
 
   const handleCopyReceipt = () => {
     let receipt = 'AITA? The Verdict\n';
@@ -541,18 +478,6 @@ const ConversationResults = memo(({ data, onReset, onPractice, userApiKey, user,
       receipt += '\n--- METRICS ---\n';
       Object.entries(data.metrics).forEach(([key, value]) => {
         receipt += `${key}: ${value}\n`;
-      });
-    }
-    if (data && data.scores) {
-      receipt += '\n--- SCORES ---\n';
-      Object.entries(data.scores).forEach(([key, value]) => {
-        receipt += `${key}: ${value}\n`;
-      });
-    }
-    if (data && data.explanations) {
-      receipt += '\n--- EXPLANATIONS ---\n';
-      data.explanations.forEach((exp, idx) => {
-        receipt += `${idx + 1}. ${exp}\n`;
       });
     }
     if (data && data.verdict) {
@@ -590,7 +515,7 @@ const ConversationResults = memo(({ data, onReset, onPractice, userApiKey, user,
                   <MiniGauge value={speaker.metrics.clarity?.score} label="Coherence" evidence={speaker.metrics.clarity?.quote} />
                 </>
               ) : <div className="col-span-3 text-center text-xs text-slate-400 py-4">Metrics unavailable</div>}
-            </div>
+           </div>
             <div className="space-y-4 flex-grow">
               <div className="flex flex-wrap gap-2">{speaker.tags?.map(tag => <span key={tag} className="px-2 py-1 bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wide rounded-md border border-slate-200">{tag}</span>)}</div>
               <div className="p-4 bg-slate-50 rounded-xl text-sm text-slate-600 leading-relaxed border border-slate-100 italic">"{speaker.summary}"</div>
@@ -604,8 +529,8 @@ const ConversationResults = memo(({ data, onReset, onPractice, userApiKey, user,
         <h3 className="text-2xl font-black text-slate-900 mb-2">{data.narrative?.headline}</h3>
         <p className="text-slate-700 leading-relaxed whitespace-pre-line text-lg">{typeof data.narrative?.body === 'string' ? data.narrative.body : ''}</p>
       </div>
-      
-      {data.resolve && <DetailedResolve data={data.resolve} onPractice={onPractice} userApiKey={userApiKey} />}
+
+      <DetailedResolve data={data.resolve} onPractice={onPractice} userApiKey={userApiKey} />
     </div>
   );
 });
@@ -696,27 +621,32 @@ const InputScreen = ({ mode, onAnalyze, onBack }) => {
   const [files, setFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
-
+  
   const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);
+  
   const handleDrop = (e) => {
     e.preventDefault(); setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
   };
+  
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files.length > 0) addFiles(e.target.files);
   };
+  
   const addFiles = (newFiles) => {
     const fileArray = Array.from(newFiles);
     setFiles(prev => [...prev, ...fileArray]);
   };
+  
   const removeFile = (index) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
+  
   const handleStartAnalysis = () => {
     onAnalyze(text, files);
   };
-
+  
   return (
     <div className="w-full max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
       <button onClick={onBack} className="text-sm text-slate-500 hover:text-slate-800 mb-6 flex items-center gap-1">← Back to Mission Control</button>
@@ -756,7 +686,7 @@ const InputScreen = ({ mode, onAnalyze, onBack }) => {
   );
 };
 
-export default function EquiTalkPro() {
+export default function App() {
   const [view, setView] = useState('landing');
   const [mode, setMode] = useState('conversation');
   const [analysisData, setAnalysisData] = useState(null);
@@ -765,50 +695,6 @@ export default function EquiTalkPro() {
   const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem("equitalk_api_key") || "");
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [pendingRequest, setPendingRequest] = useState(null);
-  const [isLoadingShared, setIsLoadingShared] = useState(true);
-  const [shareId, setShareId] = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordedArgument, setRecordedArgument] = useState("");
-  const recognitionRef = useRef(null);
-  
-  const user = useAuth(); // Global Auth User
-
-  // Check URL params for shared analysis on mount
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const sharedId = params.get('id');
-    
-    if (sharedId) {
-      setShareId(sharedId);
-      // Load from Firestore
-      const loadShared = async () => {
-        try {
-          // Wait for auth to initialize (even anonymous)
-          if (!user) return; // Will re-run when user changes
-          
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'analyses', sharedId);
-          const docSnap = await getDoc(docRef);
-          
-          if (docSnap.exists()) {
-            setAnalysisData(docSnap.data().data);
-            setView('results');
-          } else {
-            setError("Shared analysis not found or expired.");
-            setView('landing');
-          }
-        } catch (e) {
-          console.error("Load failed", e);
-          setError("Failed to load shared analysis.");
-          setView('landing');
-        } finally {
-          setIsLoadingShared(false);
-        }
-      };
-      loadShared();
-    } else {
-      setIsLoadingShared(false);
-    }
-  }, [user]);
 
   const handleSaveKey = (key) => {
     setUserApiKey(key);
@@ -841,23 +727,26 @@ export default function EquiTalkPro() {
       let schema = null;
       if (mode === 'conversation') {
         schema = CONVERSATION_SCHEMA;
-        systemPrompt = `You are 'AITA? AI', a brutally honest judge. Determine who is the asshole based on logic/decency. 
+        systemPrompt = `You are 'AITA? AI', a brutally honest judge. Determine who is the asshole based on logic/decency.
         TASK 1: ID Speakers/Roles. 
         TASK 2: The Asshole Score (-100 to 100).
         CRITICAL SCORING RULES:
         - -100 means Speaker A is 100% The Asshole (YTA).
         - 100 means Speaker B is 100% The Asshole (YTA).
         - 0 means neither/both (ESH/NAH).
-        - The scale measures "Asshole-ness". Higher magnitude means BIGGER ASSHOLE.
+        - The scale measures "Asshole-ness".
+        Higher magnitude means BIGGER ASSHOLE.
         Provide evidence. 
-        TASK 3: 6-Point Metric (Reasonableness, Toxicity, Logic, EQ, Manipulation, Clarity) with scores/quotes. 
+        TASK 3: 6-Point Metric (Reasonableness, Toxicity, Logic, EQ, Manipulation, Clarity) with scores/quotes.
         TASK 4: Narrative/Resolve. Return JSON.`;
         if (text) systemPrompt += `\n\nTEXT INPUT:\n${text}`;
       } else {
         schema = BS_SCHEMA;
-        systemPrompt = `Analyze text for BS. Score 0-100 (100=Truth). Find lies/contradictions. Return JSON.`;
+        systemPrompt = `Analyze text for BS.
+        Score 0-100 (100=Truth). Find lies/contradictions. Return JSON.`;
         if (text) systemPrompt += `\n\nTEXT INPUT:\n${text}`;
       }
+      
       const result = await callGemini(systemPrompt, processedFiles, schema, currentKey);
       setAnalysisData(result);
       setView('results');
@@ -878,8 +767,6 @@ export default function EquiTalkPro() {
     setError(null);
     setShowPractice(false);
     setPendingRequest(null);
-    setShareId(null);
-    // Clean URL
     window.history.pushState({}, document.title, window.location.pathname);
   };
 
@@ -888,54 +775,8 @@ export default function EquiTalkPro() {
     else setView('input');
   };
 
-  const handleRecordArgument = () => {
-    if (isRecording) {
-      recognitionRef.current && recognitionRef.current.stop();
-      setIsRecording(false);
-      return;
-    }
-    const recognition = getSpeechRecognition();
-    if (!recognition) {
-      alert("Speech recognition not supported in this browser.");
-      return;
-    }
-    recognition.lang = 'en-US';
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    let transcript = recordedArgument;
-    recognition.onresult = (event) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          transcript += event.results[i][0].transcript + ' ';
-        } else {
-          interim += event.results[i][0].transcript;
-        }
-      }
-      setRecordedArgument(transcript + interim);
-    };
-    recognition.onend = () => setIsRecording(false);
-    recognition.onerror = (e) => { setIsRecording(false); alert('Speech recognition error: ' + e.error); };
-    recognitionRef.current = recognition;
-    setIsRecording(true);
-    recognition.start();
-  };
-
-  if (isLoadingShared) return <div className="min-h-screen flex items-center justify-center bg-white"><div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div></div>;
-
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-indigo-100 selection:text-indigo-900 relative">
-      {/* Live Argument Recorder UI */}
-      <div className="fixed top-4 right-4 z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-4 flex flex-col items-end gap-2">
-        <button onClick={handleRecordArgument} className={`px-4 py-2 rounded-lg font-bold shadow ${isRecording ? 'bg-rose-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>{isRecording ? 'Stop Recording' : 'Record Live Argument'}</button>
-        <textarea
-          className="w-72 h-32 p-2 border border-slate-300 rounded-lg text-slate-800 mt-2"
-          placeholder="Your argument will appear here..."
-          value={recordedArgument}
-          onChange={e => setRecordedArgument(e.target.value)}
-        />
-        <span className="text-xs text-slate-400">{isRecording ? 'Recording... Speak now.' : 'Click to start recording.'}</span>
-      </div>
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div onClick={handleReset} className="flex items-center gap-2 cursor-pointer group">
@@ -957,8 +798,6 @@ export default function EquiTalkPro() {
              onReset={handleReset} 
              onPractice={() => setShowPractice(true)}
              userApiKey={userApiKey}
-             user={user}
-             shareId={shareId}
            />
         )}
         {view === 'results' && mode === 'bs' && analysisData && <BSResults data={analysisData} onReset={handleReset} />}
