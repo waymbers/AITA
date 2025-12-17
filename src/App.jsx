@@ -1,15 +1,22 @@
 import React, { useState, useRef, useEffect, memo } from 'react';
 // For speech recognition
+import React, { useState, useRef, useEffect, memo } from 'react';
+import { MessageSquare, AlertTriangle, /* ... all your other icons */ } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+// ... all your other imports MUST come first!
+
 const getSpeechRecognition = () => {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   return SpeechRecognition ? new SpeechRecognition() : null;
 };
-  // Live argument recording state
+
+export default function EquiTalkPro() {
+  // ✅ MOVE THE HOOKS INSIDE THE FUNCTION
   const [isRecording, setIsRecording] = useState(false);
   const [recordedArgument, setRecordedArgument] = useState("");
   const recognitionRef = useRef(null);
 
-  // Start/stop recording logic
+  // ✅ MOVE THE HANDLER INSIDE THE FUNCTION
   const handleRecordArgument = () => {
     if (isRecording) {
       recognitionRef.current && recognitionRef.current.stop();
@@ -21,27 +28,11 @@ const getSpeechRecognition = () => {
       alert("Speech recognition not supported in this browser.");
       return;
     }
-    recognition.lang = 'en-US';
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    let transcript = recordedArgument;
-    recognition.onresult = (event) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          transcript += event.results[i][0].transcript + ' ';
-        } else {
-          interim += event.results[i][0].transcript;
-        }
-      }
-      setRecordedArgument(transcript + interim);
-    };
-    recognition.onend = () => setIsRecording(false);
-    recognition.onerror = (e) => { setIsRecording(false); alert('Speech recognition error: ' + e.error); };
-    recognitionRef.current = recognition;
-    setIsRecording(true);
-    recognition.start();
+    // ... rest of your recording logic
   };
+
+  // ... rest of your existing EquiTalkPro code
+}
 import { 
   MessageSquare, 
   AlertTriangle, 
