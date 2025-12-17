@@ -21,4 +21,5 @@ app.post('/api/gemini', async (req, res) => {
   }
 });
 
-app.listen(3001, () => console.log('Gemini proxy running on port 3001'));
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`Gemini proxy running on port ${PORT}`));
