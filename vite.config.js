@@ -1,15 +1,18 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+// vite.config.js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // 1. Force absolute paths so Render finds your JS/CSS
-  base: '/', 
-  build: {
-    // 2. Ensure the output folder matches your Render 'Publish Directory'
-    outDir: 'dist',
-    // 3. Generates a manifest to help debug asset loading if needed
-    manifest: true,
-  },
-});
+  server: {
+    proxy: {
+      // This tells Vite to proxy all requests starting with /api
+      '/api': {
+        // To your backend server URL
+        target: 'https://aita-ixi9.onrender.com',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
+  }
+})
